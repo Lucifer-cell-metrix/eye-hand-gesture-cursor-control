@@ -42,16 +42,24 @@ Perfect for:
 | 👃 **Move nose up/down** (scroll mode) | Scroll up / down |
 | 👁️ **Iris tracking** (default mode) | Passive cursor follow |
 
-### ✋ Hand Gesture Control (`hand_control.py`)
+### ✋ Hand Gesture Control (`hand_control.py`) — Two-Hand Mode
+
+**Right Hand** 🖐️ → Cursor Movement
 
 | Gesture | Action |
 |---|---|
-| ☝️ **Point index finger** | Move cursor |
-| 🤏 **Pinch index + thumb** | Left click |
+| ☝️ **Point index finger** | Move cursor on screen |
+
+**Left Hand** 🤚 → Clicks & Scroll
+
+| Gesture | Action |
+|---|---|
+| 🤏 **Pinch index + thumb** (quick) | Left click |
+| 🤏 **Pinch index + thumb** (hold 3s) | Start drag |
 | 🤏 **Pinch middle + thumb** | Right click |
-| ✌️ **Index + middle finger up** | Enter scroll mode |
-| ✌️⬆️ **Two fingers — hand above center** | Scroll up |
-| ✌️⬇️ **Two fingers — hand below center** | Scroll down |
+| ✌️ **Peace sign (2 fingers up)** | Enter scroll mode |
+| ✌️⬆️ **Peace sign — move hand up** | Scroll up |
+| ✌️⬇️ **Peace sign — move hand down** | Scroll down |
 
 ### 👁️ Legacy Eye Control (`eye_control.py`)
 
