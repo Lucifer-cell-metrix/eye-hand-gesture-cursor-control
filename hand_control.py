@@ -16,9 +16,12 @@ JITTER_THRESHOLD = 3         # Ignore cursor movements smaller than this (pixels
 CLICK_THRESHOLD = 30         # Pinch distance for clicks (pixels)
 RIGHT_CLICK_THRESHOLD = 30   # Middle+thumb distance for right click
 CLICK_COOLDOWN = 0.45
-SCROLL_SPEED = 12
 SCROLL_FINGER_DIST = 110     # Max distance between index & middle tips for scroll
-SCROLL_ACCUMULATE = 4        # Accumulated movement needed before scroll fires
+SCROLL_DEAD_ZONE = 25        # Pixels from anchor before scroll starts (prevents accidental scroll)
+SCROLL_SPEED_MIN = 2         # Min scroll amount per frame
+SCROLL_SPEED_MAX = 30        # Max scroll amount per frame
+SCROLL_RAMP_DIST = 120       # Pixels from anchor to reach max scroll speed
+SCROLL_COOLDOWN = 0.03       # Seconds between scroll events (lower = smoother)
 DRAG_HOLD_TIME = 2.5         # Seconds to hold pinch before drag starts
 MARGIN_RATIO = 0.12          # Active hand zone margin (smaller = more screen coverage)
 
@@ -71,8 +74,8 @@ smooth_x, smooth_y = screen_w / 2, screen_h / 2  # Start at screen center
 
 click_time = 0
 right_click_time = 0
-scroll_ref_y = None
-scroll_accumulated = 0
+scroll_anchor_y = None       # Y position where scroll mode started (joystick center)
+last_scroll_time = 0
 is_dragging = False
 drag_fist_start = None
 frames_without_right_hand = 0
@@ -319,27 +322,42 @@ while True:
         if scroll_active:
             avg_y = (l_index_tip[1] + l_middle_tip[1]) // 2
 
-            if scroll_ref_y is not None:
-                scroll_accumulated += (avg_y - scroll_ref_y)
+            # Set anchor point when scroll mode first activates
+            if scroll_anchor_y is None:
+                scroll_anchor_y = avg_y
 
-                if scroll_accumulated < -SCROLL_ACCUMULATE:
-                    cv2.putText(canvas, "SCROLL UP", (50, 50),
+            # Distance from anchor (positive = hand moved down, negative = up)
+            offset = avg_y - scroll_anchor_y
+
+            # Draw anchor line and zone indicator
+            anchor_x = (l_index_tip[0] + l_middle_tip[0]) // 2
+            cv2.line(canvas, (anchor_x - 40, scroll_anchor_y), (anchor_x + 40, scroll_anchor_y),
+                     (255, 255, 0), 2, cv2.LINE_AA)
+            cv2.circle(canvas, (anchor_x, avg_y), 8, (0, 255, 255), -1, cv2.LINE_AA)
+            cv2.arrowedLine(canvas, (anchor_x, scroll_anchor_y), (anchor_x, avg_y),
+                            (0, 255, 0) if offset < 0 else (0, 0, 255), 2, cv2.LINE_AA)
+
+            if abs(offset) > SCROLL_DEAD_ZONE and current_time - last_scroll_time > SCROLL_COOLDOWN:
+                # Calculate scroll speed based on distance from anchor (joystick style)
+                effective_offset = abs(offset) - SCROLL_DEAD_ZONE
+                speed = np.interp(effective_offset, (0, SCROLL_RAMP_DIST), (SCROLL_SPEED_MIN, SCROLL_SPEED_MAX))
+                speed = int(speed)
+
+                if offset < 0:
+                    # Hand moved UP → scroll UP
+                    pyautogui.scroll(speed)
+                    cv2.putText(canvas, f"SCROLL UP ({speed})", (50, 50),
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2, cv2.LINE_AA)
-                    pyautogui.scroll(SCROLL_SPEED)
-                    scroll_accumulated = 0
-                elif scroll_accumulated > SCROLL_ACCUMULATE:
-                    cv2.putText(canvas, "SCROLL DOWN", (50, 50),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2, cv2.LINE_AA)
-                    pyautogui.scroll(-SCROLL_SPEED)
-                    scroll_accumulated = 0
                 else:
-                    cv2.putText(canvas, "SCROLL MODE", (50, 50),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 255, 0), 2, cv2.LINE_AA)
-            else:
-                cv2.putText(canvas, "SCROLL MODE", (50, 50),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 255, 0), 2, cv2.LINE_AA)
+                    # Hand moved DOWN → scroll DOWN
+                    pyautogui.scroll(-speed)
+                    cv2.putText(canvas, f"SCROLL DOWN ({speed})", (50, 50),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 100, 255), 2, cv2.LINE_AA)
 
-            scroll_ref_y = avg_y
+                last_scroll_time = current_time
+            else:
+                cv2.putText(canvas, "SCROLL READY", (50, 50),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 255, 0), 2, cv2.LINE_AA)
 
             # Release drag if active
             if is_dragging:
@@ -349,8 +367,7 @@ while True:
 
         # ── CLICK / DRAG MODE ──
         else:
-            scroll_ref_y = None
-            scroll_accumulated = 0
+            scroll_anchor_y = None
 
             pinching = l_index_thumb_dist < CLICK_THRESHOLD
 
@@ -420,8 +437,7 @@ while True:
             pyautogui.mouseUp()
             is_dragging = False
             drag_fist_start = None
-        scroll_ref_y = None
-        scroll_accumulated = 0
+        scroll_anchor_y = None
 
     # ── Status overlay ──
     r_status = f"R: Cursor ({right_hand_conf:.0%})" if right_hand_pts else "R: ---"
